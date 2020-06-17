@@ -150,7 +150,6 @@ void Scene::render()
 		glm::value_ptr(m_camera.getProjection())
 	);
 
-
 	glDispatchComputeIndirect(0);
 
 	// make sure image is finished writing

@@ -61,21 +61,39 @@ vec3 scene(Ray ray)
 {
 	vec3 outputColour = vec3(0.0f);
 
-	if (hitSphere(ray, vec3(0.0f, 0.0f, 10.0f), 1.0f) > 0.0f)
+	uint numSpheres = 4;
+	vec3 spherePositions[4] = {
+		vec3(0.0f, 0.0f, 5.0f),
+		vec3(0.0f, 0.0f, -5.0f),
+		vec3(5.0f, 0.0f, 0.0f),
+		vec3(-5.0f, 0.0f, 0.0f)
+	};
+	float sphereRadii[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+
+	// float dist = 1.0f / 0.0f; // inf
+	float dist = -1.0f; // max trace distance?
+	int hitIndex = -1;
+
+	for (int i = 0; i < numSpheres; ++i)
 	{
-		outputColour = vec3(0.0f, 0.0f, 1.0f);
+		float t = hitSphere(ray, spherePositions[i], sphereRadii[i]);
+
+		if (t > 0.0f && (t < dist || hitIndex == -1))
+		{
+			dist = t;
+			hitIndex = i;
+		}
 	}
-	else if (hitSphere(ray, vec3(0.0f, 0.0f, -10.0f), 1.0f) > 0.0f)
+
+	if (hitIndex != -1)
 	{
-		outputColour = vec3(0.0f, 1.0f, 1.0f);
-	}
-	else if (hitSphere(ray, vec3(10.0f, 0.0f, 0.0f), 1.0f) > 0.0f)
-	{
-		outputColour = vec3(1.0f, 0.0f, 0.0f);
-	}
-	else if (hitSphere(ray, vec3(-10.0f, 0.0f, 0.0f), 1.0f) > 0.0f)
-	{
-		outputColour = vec3(1.0f, 1.0f, 0.0f);
+		vec3 hitPos = ray.origin + ray.direction * dist;
+		vec3 sphereCenter = spherePositions[hitIndex];
+		vec3 normal = normalize(hitPos - sphereCenter);
+		vec3 reflect = reflect(ray.direction, normal);
+		// could make a recursive call to scene() here
+		// vec3 normal = vec3(1.0f, 0.0f, 0.0f);
+		outputColour = texture(skyTexture, equirectangularLookup(reflect)).rgb;
 	}
 	else
 	{
