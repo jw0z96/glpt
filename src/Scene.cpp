@@ -2,6 +2,8 @@
 
 #include <imgui/imgui.h>
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include "GLUtils/Timer.h"
 
 #include <algorithm>
@@ -10,6 +12,7 @@
 #include <iostream>
 
 Scene::Scene() :
+	m_camera(),
 	m_computeShader({{GL_COMPUTE_SHADER, "shaders/raytrace_comp.glsl"}}),
 	m_outputShader({
 		{GL_VERTEX_SHADER, "shaders/screenspace_vert.glsl"}, {GL_FRAGMENT_SHADER, "shaders/output_frag.glsl"}
@@ -20,6 +23,15 @@ Scene::Scene() :
 	glDisable(GL_DEPTH_TEST);
 	m_emptyVAO.bind();
 	resize(800, 600); // these constants match those in main.cpp
+
+	// Set constant uniforms on the shaders
+	m_computeShader.use();
+	glUniformMatrix4fv(
+		m_computeShader.getUniformLocation("projection"),
+		1,
+		GL_FALSE,
+		glm::value_ptr(m_camera.getProjection())
+	);
 }
 
 void Scene::processEvent(const SDL_Event& event)
@@ -29,7 +41,17 @@ void Scene::processEvent(const SDL_Event& event)
 			event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED))
 	{
 		resize(event.window.data1, event.window.data2); // implicit cast to uint
+		m_camera.setAspect(event.window.data1, event.window.data2);
+		m_computeShader.use();
+		glUniformMatrix4fv(
+			m_computeShader.getUniformLocation("projection"),
+			1,
+			GL_FALSE,
+			glm::value_ptr(m_camera.getProjection())
+		);
 	}
+
+	m_camera.processInput(event);
 }
 
 void Scene::resize(const unsigned int& width, const unsigned int& height)
@@ -55,6 +77,13 @@ void Scene::render()
 	GLUtils::scopedTimer(newFrameTimer);
 
 	m_computeShader.use();
+	glUniformMatrix4fv(
+		m_computeShader.getUniformLocation("view"),
+		1,
+		GL_FALSE,
+		glm::value_ptr(m_camera.getView())
+	);
+
 	glDispatchComputeIndirect(0);
 
 	// make sure image is finished writing

@@ -2,6 +2,8 @@
 
 #include <SDL2/SDL.h>
 
+#include "OrbitalCamera.h"
+
 #include "GLUtils/ShaderProgram.h"
 #include "GLUtils/Buffer.h"
 #include "GLUtils/VAO.h"
@@ -37,6 +39,8 @@ private:
 	};
 
 	bool initIndexFramebuffer(const unsigned int& width, const unsigned int& height);
+
+	OrbitalCamera m_camera;
 
 	const GLUtils::ShaderProgram m_computeShader, m_outputShader;
 	const GLUtils::Buffer m_indirectComputeBuffer;
