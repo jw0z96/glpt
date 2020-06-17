@@ -110,7 +110,22 @@ void Scene::resize(const unsigned int& width, const unsigned int& height)
 	m_outputTex.bindToImageUnit(0, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
 	// set the indirect command buffer
-	const DispatchIndirectCommand indirectCompute = {width, height, 1};
+
+	// we divide by 32 since we dispatch 32x32 tiles, it's SO MUCH FASTER!!!
+	const DispatchIndirectCommand indirectCompute = {
+		GLuint(ceil(width / 32.0f)),
+		GLuint(ceil(height / 32.0f)),
+		1
+	};
+
+	// const DispatchIndirectCommand indirectCompute = {
+	// 	width,
+	// 	height,
+	// 	1
+	// };
+
+	std::cout<<"resizing to: "<<width<<", "<<height<<"\n";
+	std::cout<<"dispatching: "<<indirectCompute.num_groups_x<<", "<<indirectCompute.num_groups_y<<"\n";
 	m_indirectComputeBuffer.bindAs(GL_DISPATCH_INDIRECT_BUFFER);
 	glBufferData(GL_DISPATCH_INDIRECT_BUFFER, sizeof(indirectCompute), &indirectCompute, GL_DYNAMIC_DRAW);
 

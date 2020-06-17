@@ -1,6 +1,7 @@
 #version 430
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+// layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D outputTexture;
 
@@ -86,8 +87,16 @@ vec3 scene(Ray ray)
 
 void main()
 {
-	vec2 textureDimensions = imageSize(outputTexture);
-	vec2 uv = gl_GlobalInvocationID.xy / textureDimensions;
+	ivec2 textureDimensions = imageSize(outputTexture);
+
+	uvec2 index = gl_GlobalInvocationID.xy; // local size 1
+
+	if (index.x >- textureDimensions.x || index.y >- textureDimensions.y)
+	{
+		return;
+	}
+
+	vec2 uv = vec2(index) / textureDimensions;
 
 	Ray initialRay;
 
@@ -109,5 +118,5 @@ void main()
 	vec4 outputColour = vec4(scene(initialRay), 1.0f);
 
 	// output to a specific pixel in the image
-	imageStore(outputTexture, ivec2(gl_GlobalInvocationID.xy), outputColour);
+	imageStore(outputTexture, ivec2(index), outputColour);
 }
