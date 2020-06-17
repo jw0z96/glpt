@@ -14,7 +14,7 @@ OrbitalCamera::OrbitalCamera()
 	: m_theta(0.0f)
 	, m_phi(0.0f)
 	, m_target(0.0f)
-	, m_distance(20.0f)
+	, m_distance(5.0f)
 	, m_viewMat(std::nullopt)
 	, m_fov(45.0f)
 	, m_aspect(1.0f)
@@ -50,6 +50,10 @@ void OrbitalCamera::processInput(const SDL_Event& event)
 		m_distance -= event.wheel.y * s_scrollSensitivity;
 		m_distance = glm::clamp(m_distance, m_nearClip, m_farClip); // lazy
 		m_viewMat.reset();
+
+		m_fov -= event.wheel.x * s_scrollSensitivity;
+		m_fov = glm::clamp(m_fov, 0.0f, 180.0f); // lazy
+		m_projectionMat.reset();
 	}
 	default:
 		break;

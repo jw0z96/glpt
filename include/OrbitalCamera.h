@@ -28,7 +28,7 @@ public:
 		m_distance = distance;
 	}
 
-	glm::mat4 getView() const
+	inline const glm::mat4& getView() const
 	{
 		// not sure why this doesn't work, whilst returning a reference:
 		// return m_viewMat.value_or(m_viewMat.emplace(calculateView()));
@@ -62,10 +62,11 @@ public:
 		m_projectionMat.reset();
 	}
 
-	inline glm::mat4 getProjection() const
+	inline const glm::mat4& getProjection() const
 	{
-		return m_projectionMat.has_value() ? m_projectionMat.value()
-										   : m_projectionMat.emplace(calculateProjection());
+		// not sure why this doesn't work, whilst returning a reference:
+		// return m_projectionMat.value_or(m_projectionMat.emplace(calculateProjection()));
+		return m_projectionMat.has_value() ? m_projectionMat.value() : m_projectionMat.emplace(calculateProjection());
 	}
 
 private:
