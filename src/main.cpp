@@ -5,6 +5,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_sdl.h>
 #include <imgui/imgui_impl_opengl3.h>
@@ -55,9 +58,12 @@ SDL_GLContext createGLContext(SDL_Window* window)
 }
 } // namespace SDL_GL_IMGUI_APP
 
-int main(void)
+int main(int argc, char const *argv[])
 {
 	std::cout << "Starting PointCloudRendering\n";
+
+	// Get command line arguments, we should really bail / print a help message here
+	const char* filepath = (argc > 1) ? argv[1] : "res/leadenhall_market_2k.hdr";
 
 	// initialize SDL
 	if(SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -121,6 +127,7 @@ int main(void)
 	{
 		Scene scene;
 		scene.resize(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
+		scene.loadSky(filepath);
 
 		SDL_Event event;
 		bool running = true;

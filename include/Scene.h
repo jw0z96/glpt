@@ -16,6 +16,8 @@ public:
 
 	// ~Scene(); // let the compiler do it
 
+	void loadSky(const char* filepath);
+
 	void processEvent(const SDL_Event& event);
 
 	void resize(const unsigned int& width, const unsigned int& height);
@@ -45,7 +47,8 @@ private:
 	const GLUtils::ShaderProgram m_computeShader, m_outputShader;
 	const GLUtils::Buffer m_indirectComputeBuffer;
 	const GLUtils::VAO m_emptyVAO;
-	const GLUtils::Texture m_outputTex;
+	const GLUtils::Texture m_outputTex, m_skyTex;
 
 	TonemappingMode m_tonemappingMode;
+	float m_exposure;
 };

@@ -1,6 +1,12 @@
 #version 430
 
+noperspective in vec2 uv;
+
+out vec4 fragColour;
+
 layout(rgba32f, binding = 0) uniform readonly image2D outputTexture;
+
+uniform float exposure;
 
 // use subroutines to select tonemapping method
 subroutine vec3 tonemap(vec3 inputColour);
@@ -29,13 +35,38 @@ vec3 tonemapACESFilmic(vec3 inputColour)
 	);
 }
 
-noperspective in vec2 uv;
+vec3 lessThan(vec3 f, float value)
+{
+	return vec3(
+		(f.x < value) ? 1.0f : 0.0f,
+		(f.y < value) ? 1.0f : 0.0f,
+		(f.z < value) ? 1.0f : 0.0f);
+}
 
-out vec4 fragColour;
+vec3 linearToSRGB(vec3 rgb)
+{
+	rgb = clamp(rgb, 0.0f, 1.0f);
+
+	return mix(
+		pow(rgb, vec3(1.0f / 2.4f)) * 1.055f - 0.055f,
+		rgb * 12.92f,
+		lessThan(rgb, 0.0031308f)
+	);
+}
 
 void main()
 {
 	ivec2 texCoords = ivec2(imageSize(outputTexture) * uv);
 	vec3 outputColour = imageLoad(outputTexture, texCoords).rgb;
-	fragColour = vec4(tonemapSelection(outputColour), 1.0f);
+
+	// apply exposure (how long the shutter is open)
+	outputColour *= exposure;
+
+	// convert unbounded HDR color range to SDR color range
+	outputColour = tonemapSelection(outputColour);
+
+	// convert from linear to sRGB for display
+	outputColour = linearToSRGB(outputColour);
+
+	fragColour = vec4(outputColour, 1.0f);
 }

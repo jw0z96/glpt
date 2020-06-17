@@ -32,6 +32,7 @@ message(STATUS "GLEW includes from ${GLEW_INCLUDE_DIRS}")
 
 # include everything under 'libs', which contains libraries supplied by the project
 include_directories(libs)
+
 # whatever trevor
 add_library(imgui STATIC
 	libs/imgui/imconfig.h

@@ -1,5 +1,7 @@
 #include "Scene.h"
 
+#include <stb/stb_image.h>
+
 #include <imgui/imgui.h>
 
 #include <glm/gtc/type_ptr.hpp>
@@ -18,7 +20,9 @@ Scene::Scene() :
 		{GL_VERTEX_SHADER, "shaders/screenspace_vert.glsl"}, {GL_FRAGMENT_SHADER, "shaders/output_frag.glsl"}
 	}),
 	m_outputTex(),
-	m_tonemappingMode(NONE)
+	m_skyTex(),
+	m_tonemappingMode(NONE),
+	m_exposure(1.0f)
 {
 	glDisable(GL_DEPTH_TEST);
 	m_emptyVAO.bind();
@@ -32,6 +36,45 @@ Scene::Scene() :
 		GL_FALSE,
 		glm::value_ptr(m_camera.getProjection())
 	);
+	glUniform1i(m_computeShader.getUniformLocation("skyTexture"), 1);
+}
+
+void Scene::loadSky(const char* filepath)
+{
+	int width, height, channels;
+
+	// TODO: use stbi_is_hdr to determine whether it's a hdr
+	float* data = stbi_loadf(filepath, &width, &height, &channels, 0);
+
+	if (!data)
+	{
+		std::cout<<"Error: Sky '"<<filepath<<"' could not be loaded\n";
+		return;
+	}
+
+	std::cout<<filepath<<": width: "<<width<<" height: "<<height<<" channels: "<<channels<<"\n";
+
+	glActiveTexture(GL_TEXTURE1);
+	m_skyTex.bindAs(GL_TEXTURE_2D);
+
+	glTexImage2D(GL_TEXTURE_2D,
+		0,
+		GL_RGB32F,
+		width,
+		height,
+		0,
+		GL_RGB,
+		GL_FLOAT,
+		data
+	);
+	// glGenerateMipmap(GL_TEXTURE_2D);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	stbi_image_free(data);
 }
 
 void Scene::processEvent(const SDL_Event& event)
@@ -60,6 +103,7 @@ void Scene::resize(const unsigned int& width, const unsigned int& height)
 	glViewport(0, 0, width, height);
 
 	// resize the texture resource
+	glActiveTexture(GL_TEXTURE0);
 	m_outputTex.bindAs(GL_TEXTURE_2D);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
 	// bind mip level 0 of our texture to image unit 0 (which is not the same as the texture unit)
@@ -91,6 +135,7 @@ void Scene::render()
 		glm::value_ptr(m_camera.getProjection())
 	);
 
+
 	glDispatchComputeIndirect(0);
 
 	// make sure image is finished writing
@@ -116,6 +161,8 @@ void Scene::render()
 	}
 	glUniformSubroutinesuiv(GL_FRAGMENT_SHADER, 1, &subRoutineIndex);
 
+	glUniform1f(m_outputShader.getUniformLocation("exposure"), m_exposure);
+
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
@@ -125,6 +172,10 @@ void Scene::renderUI()
 	ImGui::Begin("Stats");
 	const float frameTime = GLUtils::getElapsed(newFrameTimer);
 	ImGui::Text("Frame time: %.1f ms (%.1f fps)", frameTime, 1000.0f / frameTime);
+
+	ImGui::Separator();
+
+	ImGui::SliderFloat("Exposure", &m_exposure, 0.0f, 10.0f, "%.1f");
 
 	ImGui::Separator();
 
