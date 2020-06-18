@@ -54,13 +54,14 @@ const vec3 spherePositions[4] = {
 	vec3(2.0f, 0.0f, 0.0f),
 	vec3(-2.0f, 0.0f, 0.0f)
 };
+const float sphereRadii[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 const vec3 sphereColours[4] = {
 	vec3(0.2f, 0.2f, 1.0f),
 	vec3(0.2f, 1.0f, 0.2f),
 	vec3(1.0f, 0.2f, 0.2f),
 	vec3(1.0f, 1.0f, 1.0f)
 };
-const float sphereRadii[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+const float sphereRoughness[4] = {0.0f, 0.333f, 0.667f, 1.0f};
 // pack sphere positions with radius into vec4? can't access with struct member function
 
 struct Ray
@@ -120,10 +121,9 @@ HitInfo hitScene(Ray ray)
 }
 
 // get the next ray
-vec3 surfaceDistribution(vec3 view, vec3 normal) // material
+vec3 surfaceDistribution(vec3 view, vec3 normal, float roughness) // material
 {
-	float roughness = 0.5f;
-	return randomFloat(rngSeed) > roughness ?
+	return randomFloat(rngSeed) < roughness ?
 		normalize(normal + randomUnitVector(rngSeed)) :
 		reflect(view, normal);
 }
@@ -147,11 +147,22 @@ vec3 scene(Ray ray)
 		vec3 sphereCenter = spherePositions[info.index];
 		vec3 normal = normalize(hitPos - sphereCenter);
 
-		ray.direction = surfaceDistribution(ray.direction, normal);
+		ray.direction = surfaceDistribution(ray.direction, normal, sphereRoughness[info.index]);
 		ray.origin = hitPos + normal * 0.01f; // avoid self intersection?
 
 		// outputColour += surfaceColour * sphereEmission[info.index]; // ???
 		surfaceColour *= sphereColours[info.index];
+
+		// do 'russian roulette' sampling - as our sufaceColour reduces, the chances of terminating a ray
+		// increases, as it will be less likely to contribute to our image
+		{
+			float p = max(surfaceColour.r, max(surfaceColour.g, surfaceColour.b));
+			if (randomFloat(rngSeed) > p)
+				break;
+
+			// Add the energy we 'lose' by randomly terminating paths
+			surfaceColour /= p;
+		}
 	}
 
 	if (info.index != -1)
