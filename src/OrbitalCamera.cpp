@@ -23,7 +23,7 @@ OrbitalCamera::OrbitalCamera()
 	, m_projectionMat(std::nullopt)
 {}
 
-void OrbitalCamera::processInput(const SDL_Event& event)
+bool OrbitalCamera::processInput(const SDL_Event& event)
 {
 	// mouse sensitivity multiplier for the camera rotation control
 	constexpr float s_mouseSensitivity = 0.001f;
@@ -43,6 +43,7 @@ void OrbitalCamera::processInput(const SDL_Event& event)
 			m_phi = glm::clamp(m_phi, -HALF_PI, HALF_PI);
 
 			m_viewMat.reset();
+			return true;
 		}
 	}
 	break;
@@ -54,10 +55,13 @@ void OrbitalCamera::processInput(const SDL_Event& event)
 		m_fov -= event.wheel.x * s_scrollSensitivity;
 		m_fov = glm::clamp(m_fov, 0.0f, 180.0f); // lazy
 		m_projectionMat.reset();
+		return true;
 	}
 	default:
 		break;
 	}
+
+	return false;
 }
 
 const glm::mat4 OrbitalCamera::calculateView() const

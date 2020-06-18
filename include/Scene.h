@@ -51,4 +51,5 @@ private:
 
 	TonemappingMode m_tonemappingMode;
 	float m_exposure;
+	GLuint m_frame;
 };

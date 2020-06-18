@@ -7,11 +7,42 @@ layout(rgba32f, binding = 0) uniform image2D outputTexture;
 
 layout(binding = 1) uniform sampler2D skyTexture;
 
+uniform uint frame;
 uniform mat4 view;
 uniform mat4 projection;
 
 const float PI = 3.141592653589793f;
 const float TWO_PI = 6.283185307179586f;
+
+// initialize a random number seed based on compute index and frame
+// see: https://blog.demofox.org/2020/05/25/casual-shadertoy-path-tracing-1-basic-camera-diffuse-emissive
+uint rngSeed = uint(uint(gl_GlobalInvocationID.x) * uint(1973) + uint(gl_GlobalInvocationID.y) * uint(9277) + uint(frame) * uint(26699)) | uint(1);
+
+uint wangHash(inout uint seed)
+{
+	seed = uint(seed ^ uint(61)) ^ uint(seed >> uint(16));
+	seed *= uint(9);
+	seed = seed ^ (seed >> 4);
+	seed *= uint(0x27d4eb2d);
+	seed = seed ^ (seed >> 15);
+	return seed;
+}
+
+// random float between [0, 1]
+float randomFloat(inout uint seed)
+{
+	return float(wangHash(seed)) / 4294967296.0;
+}
+
+vec3 randomUnitVector(inout uint seed)
+{
+	float z = randomFloat(seed) * 2.0f - 1.0f;
+	float a = randomFloat(seed) * TWO_PI;
+	float r = sqrt(1.0f - z * z);
+	float x = r * cos(a);
+	float y = r * sin(a);
+	return vec3(x, y, z);
+}
 
 const uint maxTraceDepth = 5;
 
@@ -91,18 +122,18 @@ HitInfo hitScene(Ray ray)
 // get the next ray
 vec3 surfaceDistribution(vec3 view, vec3 normal) // material
 {
-	return reflect(view, normal);
+	float roughness = 0.5f;
+	return randomFloat(rngSeed) > roughness ?
+		normalize(normal + randomUnitVector(rngSeed)) :
+		reflect(view, normal);
 }
 
-// sphere scene for testing
-vec3 colour(Ray ray)
+vec3 scene(Ray ray)
 {
 	vec3 outputColour = vec3(0.0f);
 	vec3 surfaceColour = vec3(1.0f); // start at 1.0f, multiply through by the surface colour of the spheres
 
-
 	HitInfo info;
-
 	for (uint depth = 0; depth < maxTraceDepth; ++depth)
 	{
 		info = hitScene(ray);
@@ -117,9 +148,9 @@ vec3 colour(Ray ray)
 		vec3 normal = normalize(hitPos - sphereCenter);
 
 		ray.direction = surfaceDistribution(ray.direction, normal);
-		ray.origin = hitPos; //  + normal * 0.0001f; // avoid self shadowing?
+		ray.origin = hitPos + normal * 0.01f; // avoid self intersection?
 
-		// surfaceColour += sphereEmission[info.index]; // ???
+		// outputColour += surfaceColour * sphereEmission[info.index]; // ???
 		surfaceColour *= sphereColours[info.index];
 	}
 
@@ -147,7 +178,7 @@ void main()
 		return;
 	}
 
-	vec2 uv = vec2(index) / textureDimensions;
+	// TODO: loop here for num samples?
 
 	Ray initialRay;
 
@@ -155,9 +186,12 @@ void main()
 	mat4 inView = inverse(view);
 	initialRay.origin = (inView * vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 
+	// random offset between [-0.5, 0.5] to do random sampling around the pixel center
+	vec2 jitter = vec2(randomFloat(rngSeed), randomFloat(rngSeed)) - 0.5f;
+
 	// projection[1][1] gets us tan(0.5 * fov), with fov in radians, which gives us the correct fov
 	// https://stackoverflow.com/questions/46182845/field-of-view-aspect-ratio-view-matrix-from-projection-matrix-hmd-ost-calib
-	// TODO: sampling around pixel center
+	vec2 uv = vec2(index + jitter) / textureDimensions;
 	initialRay.direction = vec3(uv * 2.0f - 1.0f, -projection[1][1]);
 
 	// Extract the aspect ratio from the projection matrix, and correct for it
@@ -166,8 +200,10 @@ void main()
 	initialRay.direction = (vec4(initialRay.direction, 1.0f) * view).xyz;
 	initialRay.direction = normalize(initialRay.direction);
 
-	vec4 outputColour = vec4(colour(initialRay), 1.0f);
+	vec4 outputColour = vec4(scene(initialRay), 1.0f);
+	// vec4 outputColour = vec4(mix(scene(initialRay), scene(initialRay), 0.5), 1.0f);
 
-	// output to a specific pixel in the image
+	vec4 lastFrameColor = imageLoad(outputTexture, ivec2(index));
+	outputColour = mix(lastFrameColor, outputColour, 1.0f / float(frame + 1));
 	imageStore(outputTexture, ivec2(index), outputColour);
 }

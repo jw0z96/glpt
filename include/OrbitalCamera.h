@@ -14,7 +14,7 @@ class OrbitalCamera
 public:
 	OrbitalCamera();
 
-	void processInput(const SDL_Event& event);
+	bool processInput(const SDL_Event& event);
 
 	// View Matrix methods
 	inline void setCenter(const glm::vec3& target)

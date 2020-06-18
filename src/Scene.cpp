@@ -22,7 +22,8 @@ Scene::Scene() :
 	m_outputTex(),
 	m_skyTex(),
 	m_tonemappingMode(NONE),
-	m_exposure(1.0f)
+	m_exposure(1.0f),
+	m_frame(0)
 {
 	glDisable(GL_DEPTH_TEST);
 	m_emptyVAO.bind();
@@ -94,7 +95,10 @@ void Scene::processEvent(const SDL_Event& event)
 		);
 	}
 
-	m_camera.processInput(event);
+	if (m_camera.processInput(event))
+	{
+		m_frame = 0;
+	}
 }
 
 void Scene::resize(const unsigned int& width, const unsigned int& height)
@@ -139,6 +143,7 @@ void Scene::render()
 		GLUtils::scopedTimer(computeTimer);
 
 		m_computeShader.use();
+
 		glUniformMatrix4fv(
 			m_computeShader.getUniformLocation("view"),
 			1,
@@ -153,10 +158,15 @@ void Scene::render()
 			glm::value_ptr(m_camera.getProjection())
 		);
 
-		glDispatchComputeIndirect(0);
-
-		// make sure image is finished writing
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		// // loop over thr number of samples each frame
+		// constexpr unsigned int samplesPerFrame = 1;
+		// for (unsigned int sample = 0; sample < samplesPerFrame; ++sample)
+		// {
+			glUniform1ui(m_computeShader.getUniformLocation("frame"), m_frame++);
+			glDispatchComputeIndirect(0);
+			// make sure image is finished writing
+			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		// }
 	}
 
 	{
@@ -192,6 +202,9 @@ void Scene::renderUI()
 {
 	// stats window
 	ImGui::Begin("Stats");
+
+	ImGui::Text("Samples: %u", m_frame);
+
 	const float frameTime = GLUtils::getElapsed(newFrameTimer);
 	ImGui::Text("Frame time: %.1f ms (%.1f fps)", frameTime, 1000.0f / frameTime);
 	ImGui::Text("\tCompute time: %.1f ms", GLUtils::getElapsed(computeTimer));
