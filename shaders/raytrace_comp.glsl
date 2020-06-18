@@ -13,6 +13,8 @@ uniform mat4 projection;
 const float PI = 3.141592653589793f;
 const float TWO_PI = 6.283185307179586f;
 
+const uint maxTraceDepth = 5;
+
 // global 'scene' info
 const int numSpheres = 4;
 const vec3 spherePositions[4] = {
@@ -28,7 +30,6 @@ const vec3 sphereColours[4] = {
 	vec3(1.0f, 1.0f, 1.0f)
 };
 const float sphereRadii[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-
 // pack sphere positions with radius into vec4? can't access with struct member function
 
 struct Ray
@@ -40,25 +41,19 @@ struct Ray
 struct HitInfo
 {
 	float dist;
-	int index;
+	int index; // the index of the sphere we hit
 };
 
 vec2 equirectangularLookup(vec3 dir)
 {
 	vec2 uv = vec2(atan(dir.z, dir.x), acos(dir.y));
 	uv /= vec2(TWO_PI, PI);
-
-	// vec2 uv = vec2(atan(dir.z, dir.x), asin(-dir.y));
-	// uv *= vec2(0.1591f, 0.3183f); // inverse atan
-	// uv += 0.5f;
-
 	return uv;
 }
 
 // hit sphere func for testing
 float hitSphere(Ray ray, vec3 spherePosition, float radius)
 {
-	// hit sphere
 	float t = -1.0f;
 	vec3 oc = ray.origin - spherePosition;
 	float a = dot(ray.direction, ray.direction);
@@ -105,7 +100,6 @@ vec3 colour(Ray ray)
 	vec3 outputColour = vec3(0.0f);
 	vec3 surfaceColour = vec3(1.0f); // start at 1.0f, multiply through by the surface colour of the spheres
 
-	uint maxTraceDepth = 10;
 
 	HitInfo info;
 
@@ -131,18 +125,6 @@ vec3 colour(Ray ray)
 
 	if (info.index != -1)
 	{
-		// vec3 hitPos = ray.origin + ray.direction * info.dist;
-		// vec3 sphereCenter = spherePositions[info.index];
-		// vec3 normal = normalize(hitPos - sphereCenter);
-		// vec3 nextReflect = reflect(ray.direction, normal);
-		// Ray nextRay;
-		// nextRay.origin = hitPos;
-		// nextRay.direction = nextReflect;
-
-
-		// vec3 normal = vec3(1.0f, 0.0f, 0.0f);
-		// outputColour = texture(skyTexture, equirectangularLookup(ray.direction)).rgb;
-
 		// we hit max trace depth
 		outputColour = vec3(0.0f, 0.0f, 0.0f);
 	}
