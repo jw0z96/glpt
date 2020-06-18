@@ -135,49 +135,57 @@ void Scene::render()
 {
 	GLUtils::scopedTimer(newFrameTimer);
 
-	m_computeShader.use();
-	glUniformMatrix4fv(
-		m_computeShader.getUniformLocation("view"),
-		1,
-		GL_FALSE,
-		glm::value_ptr(m_camera.getView())
-	);
-
-	glUniformMatrix4fv(
-		m_computeShader.getUniformLocation("projection"),
-		1,
-		GL_FALSE,
-		glm::value_ptr(m_camera.getProjection())
-	);
-
-	glDispatchComputeIndirect(0);
-
-	// make sure image is finished writing
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-	// blit the texture to the default framebuffer (and do some tonemapping if needed)
-	glClear(GL_COLOR_BUFFER_BIT);
-	// The vertex shader will create a screen space quad, but we do need an empty VAO in core profile
-	m_outputShader.use();
-
-	// select the tonemapping mode
-	GLuint subRoutineIndex;
-	switch(m_tonemappingMode)
 	{
-		case ACES_FILMIC:
-			subRoutineIndex = m_outputShader.getSubroutineIndex(GL_FRAGMENT_SHADER, "tonemapACESFilmic");
-		break;
+		GLUtils::scopedTimer(computeTimer);
 
-		case NONE:
-		default:
-			subRoutineIndex = m_outputShader.getSubroutineIndex(GL_FRAGMENT_SHADER, "tonemapNone");
-		break;
+		m_computeShader.use();
+		glUniformMatrix4fv(
+			m_computeShader.getUniformLocation("view"),
+			1,
+			GL_FALSE,
+			glm::value_ptr(m_camera.getView())
+		);
+
+		glUniformMatrix4fv(
+			m_computeShader.getUniformLocation("projection"),
+			1,
+			GL_FALSE,
+			glm::value_ptr(m_camera.getProjection())
+		);
+
+		glDispatchComputeIndirect(0);
+
+		// make sure image is finished writing
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	}
-	glUniformSubroutinesuiv(GL_FRAGMENT_SHADER, 1, &subRoutineIndex);
 
-	glUniform1f(m_outputShader.getUniformLocation("exposure"), m_exposure);
+	{
+		GLUtils::scopedTimer(outputTimer);
 
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+		// blit the texture to the default framebuffer (and do some tonemapping if needed)
+		glClear(GL_COLOR_BUFFER_BIT);
+		// The vertex shader will create a screen space quad, but we do need an empty VAO in core profile
+		m_outputShader.use();
+
+		// select the tonemapping mode
+		GLuint subRoutineIndex;
+		switch(m_tonemappingMode)
+		{
+			case ACES_FILMIC:
+				subRoutineIndex = m_outputShader.getSubroutineIndex(GL_FRAGMENT_SHADER, "tonemapACESFilmic");
+			break;
+
+			case NONE:
+			default:
+				subRoutineIndex = m_outputShader.getSubroutineIndex(GL_FRAGMENT_SHADER, "tonemapNone");
+			break;
+		}
+		glUniformSubroutinesuiv(GL_FRAGMENT_SHADER, 1, &subRoutineIndex);
+
+		glUniform1f(m_outputShader.getUniformLocation("exposure"), m_exposure);
+
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+	}
 }
 
 void Scene::renderUI()
@@ -186,12 +194,13 @@ void Scene::renderUI()
 	ImGui::Begin("Stats");
 	const float frameTime = GLUtils::getElapsed(newFrameTimer);
 	ImGui::Text("Frame time: %.1f ms (%.1f fps)", frameTime, 1000.0f / frameTime);
+	ImGui::Text("\tCompute time: %.1f ms", GLUtils::getElapsed(computeTimer));
+	ImGui::Text("\tOutput time: %.1f ms", GLUtils::getElapsed(outputTimer));
 
 	ImGui::Separator();
 
-	ImGui::SliderFloat("Exposure", &m_exposure, 0.0f, 10.0f, "%.1f");
-
-	ImGui::Separator();
+	ImGui::Text("Exposure");
+	ImGui::SliderFloat("", &m_exposure, 0.0f, 10.0f, "%.1f");
 
 	ImGui::Text("Tonemapping Mode");
 	const char* items[] = { "None", "ACEs Filmic"};

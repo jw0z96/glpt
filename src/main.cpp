@@ -94,8 +94,8 @@ int main(int argc, char const *argv[])
 		return SDL_GL_IMGUI_APP::SDLError("SDL cannot create OpenGL context, error: ");
 	}
 
-	// disable vsync in the glContext
-	SDL_GL_SetSwapInterval(0);
+	// enable vsync in the glContext, so we don't cook
+	SDL_GL_SetSwapInterval(1);
 
 	// initialize GLEW once we have a valid GL context - TODO: GLAD?
 	glewExperimental = GL_TRUE;
