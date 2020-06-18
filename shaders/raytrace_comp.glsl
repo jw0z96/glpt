@@ -13,6 +13,24 @@ uniform mat4 projection;
 const float PI = 3.141592653589793f;
 const float TWO_PI = 6.283185307179586f;
 
+// global 'scene' info
+const int numSpheres = 4;
+const vec3 spherePositions[4] = {
+	vec3(0.0f, 0.0f, 2.0f),
+	vec3(0.0f, 0.0f, -2.0f),
+	vec3(2.0f, 0.0f, 0.0f),
+	vec3(-2.0f, 0.0f, 0.0f)
+};
+const vec3 sphereColours[4] = {
+	vec3(0.2f, 0.2f, 1.0f),
+	vec3(0.2f, 1.0f, 0.2f),
+	vec3(1.0f, 0.2f, 0.2f),
+	vec3(1.0f, 1.0f, 1.0f)
+};
+const float sphereRadii[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+
+// pack sphere positions with radius into vec4? can't access with struct member function
+
 struct Ray
 {
 	vec3 origin;
@@ -22,7 +40,7 @@ struct Ray
 struct HitInfo
 {
 	float dist;
-	vec3 normal;
+	int index;
 };
 
 vec2 equirectangularLookup(vec3 dir)
@@ -56,48 +74,81 @@ float hitSphere(Ray ray, vec3 spherePosition, float radius)
 	return (-b - sqrt(discriminant)) / (2.0f * a);
 }
 
-// sphere scene for testing
-vec3 scene(Ray ray)
+HitInfo hitScene(Ray ray)
 {
-	vec3 outputColour = vec3(0.0f);
-
-	uint numSpheres = 4;
-	vec3 spherePositions[4] = {
-		vec3(0.0f, 0.0f, 5.0f),
-		vec3(0.0f, 0.0f, -5.0f),
-		vec3(5.0f, 0.0f, 0.0f),
-		vec3(-5.0f, 0.0f, 0.0f)
-	};
-	float sphereRadii[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-
-	// float dist = 1.0f / 0.0f; // inf
-	float dist = -1.0f; // max trace distance?
-	int hitIndex = -1;
-
+	HitInfo info;
+	info.dist = -1.0f; // max trace distance?? // could be hit position instead?
+	info.index = -1;
 	for (int i = 0; i < numSpheres; ++i)
 	{
 		float t = hitSphere(ray, spherePositions[i], sphereRadii[i]);
 
-		if (t > 0.0f && (t < dist || hitIndex == -1))
+		if (t > 0.0f && (t < info.dist || info.index == -1))
 		{
-			dist = t;
-			hitIndex = i;
+			info.dist = t;
+			info.index = i;
 		}
 	}
 
-	if (hitIndex != -1)
+	return info;
+}
+
+// get the next ray
+vec3 surfaceDistribution(vec3 view, vec3 normal) // material
+{
+	return reflect(view, normal);
+}
+
+// sphere scene for testing
+vec3 colour(Ray ray)
+{
+	vec3 outputColour = vec3(0.0f);
+	vec3 surfaceColour = vec3(1.0f); // start at 1.0f, multiply through by the surface colour of the spheres
+
+	uint maxTraceDepth = 10;
+
+	HitInfo info;
+
+	for (uint depth = 0; depth < maxTraceDepth; ++depth)
 	{
-		vec3 hitPos = ray.origin + ray.direction * dist;
-		vec3 sphereCenter = spherePositions[hitIndex];
+		info = hitScene(ray);
+
+		if (info.index == -1) // the ray didn't hit anything
+		{
+			break;
+		}
+
+		vec3 hitPos = ray.origin + ray.direction * info.dist;
+		vec3 sphereCenter = spherePositions[info.index];
 		vec3 normal = normalize(hitPos - sphereCenter);
-		vec3 reflect = reflect(ray.direction, normal);
-		// could make a recursive call to scene() here
-		// vec3 normal = vec3(1.0f, 0.0f, 0.0f);
-		outputColour = texture(skyTexture, equirectangularLookup(reflect)).rgb;
+
+		ray.direction = surfaceDistribution(ray.direction, normal);
+		ray.origin = hitPos; //  + normal * 0.0001f; // avoid self shadowing?
+
+		// surfaceColour += sphereEmission[info.index]; // ???
+		surfaceColour *= sphereColours[info.index];
 	}
-	else
+
+	if (info.index != -1)
 	{
-		outputColour = texture(skyTexture, equirectangularLookup(ray.direction)).rgb;
+		// vec3 hitPos = ray.origin + ray.direction * info.dist;
+		// vec3 sphereCenter = spherePositions[info.index];
+		// vec3 normal = normalize(hitPos - sphereCenter);
+		// vec3 nextReflect = reflect(ray.direction, normal);
+		// Ray nextRay;
+		// nextRay.origin = hitPos;
+		// nextRay.direction = nextReflect;
+
+
+		// vec3 normal = vec3(1.0f, 0.0f, 0.0f);
+		// outputColour = texture(skyTexture, equirectangularLookup(ray.direction)).rgb;
+
+		// we hit max trace depth
+		outputColour = vec3(0.0f, 0.0f, 0.0f);
+	}
+	else // we left the scene
+	{
+		outputColour = surfaceColour * texture(skyTexture, equirectangularLookup(ray.direction)).rgb;
 	}
 
 	return outputColour;
@@ -133,7 +184,7 @@ void main()
 	initialRay.direction = (vec4(initialRay.direction, 1.0f) * view).xyz;
 	initialRay.direction = normalize(initialRay.direction);
 
-	vec4 outputColour = vec4(scene(initialRay), 1.0f);
+	vec4 outputColour = vec4(colour(initialRay), 1.0f);
 
 	// output to a specific pixel in the image
 	imageStore(outputTexture, ivec2(index), outputColour);
