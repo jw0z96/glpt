@@ -44,24 +44,29 @@ vec3 randomUnitVector(inout uint seed)
 	return vec3(x, y, z);
 }
 
-const uint maxTraceDepth = 5;
+#define TRACE_DEPTH 4
 
 // global 'scene' info
-const int numSpheres = 4;
-const vec3 spherePositions[4] = {
+#define NUM_SPHERES 6
+const vec3 spherePositions[NUM_SPHERES] = {
+	vec3(0.0f, -1001.0f, 0.0f),
 	vec3(0.0f, 0.0f, 2.0f),
 	vec3(0.0f, 0.0f, -2.0f),
 	vec3(2.0f, 0.0f, 0.0f),
-	vec3(-2.0f, 0.0f, 0.0f)
+	vec3(-2.0f, 0.0f, 0.0f),
+	vec3(0.0f, 2.0f, 0.0f)
 };
-const float sphereRadii[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-const vec3 sphereColours[4] = {
+const float sphereRadii[NUM_SPHERES] = {1000.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.5f};
+const vec3 sphereColours[NUM_SPHERES] = {
+	vec3(0.2f),
 	vec3(0.2f, 0.2f, 1.0f),
 	vec3(0.2f, 1.0f, 0.2f),
 	vec3(1.0f, 0.2f, 0.2f),
+	vec3(1.0f, 1.0f, 1.0f),
 	vec3(1.0f, 1.0f, 1.0f)
 };
-const float sphereRoughness[4] = {0.0f, 0.333f, 0.667f, 1.0f};
+const float sphereRoughness[NUM_SPHERES] = {1.0f, 0.0f, 0.333f, 0.667f, 1.0f, 0.0f};
+const float sphereEmission[NUM_SPHERES] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100.0f};
 // pack sphere positions with radius into vec4? can't access with struct member function
 
 struct Ray
@@ -106,7 +111,7 @@ HitInfo hitScene(Ray ray)
 	HitInfo info;
 	info.dist = -1.0f; // max trace distance?? // could be hit position instead?
 	info.index = -1;
-	for (int i = 0; i < numSpheres; ++i)
+	for (int i = 0; i < NUM_SPHERES; ++i)
 	{
 		float t = hitSphere(ray, spherePositions[i], sphereRadii[i]);
 
@@ -126,6 +131,7 @@ vec3 surfaceDistribution(vec3 view, vec3 normal, float roughness) // material
 	return randomFloat(rngSeed) < roughness ?
 		normalize(normal + randomUnitVector(rngSeed)) :
 		reflect(view, normal);
+	// return reflect(view, normal);
 }
 
 vec3 scene(Ray ray)
@@ -134,12 +140,13 @@ vec3 scene(Ray ray)
 	vec3 surfaceColour = vec3(1.0f); // start at 1.0f, multiply through by the surface colour of the spheres
 
 	HitInfo info;
-	for (uint depth = 0; depth < maxTraceDepth; ++depth)
+	for (uint depth = 0; depth < TRACE_DEPTH; ++depth)
 	{
 		info = hitScene(ray);
 
 		if (info.index == -1) // the ray didn't hit anything
 		{
+			outputColour += surfaceColour * texture(skyTexture, equirectangularLookup(ray.direction)).rgb;
 			break;
 		}
 
@@ -147,32 +154,31 @@ vec3 scene(Ray ray)
 		vec3 sphereCenter = spherePositions[info.index];
 		vec3 normal = normalize(hitPos - sphereCenter);
 
-		ray.direction = surfaceDistribution(ray.direction, normal, sphereRoughness[info.index]);
 		ray.origin = hitPos + normal * 0.01f; // avoid self intersection?
+		ray.direction = surfaceDistribution(ray.direction, normal, sphereRoughness[info.index]);
 
-		// outputColour += surfaceColour * sphereEmission[info.index]; // ???
+		outputColour += surfaceColour * sphereEmission[info.index]; // ???
 		surfaceColour *= sphereColours[info.index];
 
 		// do 'russian roulette' sampling - as our sufaceColour reduces, the chances of terminating a ray
 		// increases, as it will be less likely to contribute to our image
+		/*
+		if ((float(gl_GlobalInvocationID.x) / imageSize(outputTexture).x) > 0.5f)
 		{
+			// float rayProbability = sphereRoughness[info.index];
+			// rayProbability = max(rayProbability, 0.001f);
+			// surfaceColour /= rayProbability;
+
 			float p = max(surfaceColour.r, max(surfaceColour.g, surfaceColour.b));
 			if (randomFloat(rngSeed) > p)
+			{
 				break;
+			}
 
 			// Add the energy we 'lose' by randomly terminating paths
 			surfaceColour /= p;
 		}
-	}
-
-	if (info.index != -1)
-	{
-		// we hit max trace depth
-		outputColour = vec3(0.0f, 0.0f, 0.0f);
-	}
-	else // we left the scene
-	{
-		outputColour = surfaceColour * texture(skyTexture, equirectangularLookup(ray.direction)).rgb;
+		*/
 	}
 
 	return outputColour;

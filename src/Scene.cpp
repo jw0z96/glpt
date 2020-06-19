@@ -93,6 +93,8 @@ void Scene::processEvent(const SDL_Event& event)
 			GL_FALSE,
 			glm::value_ptr(m_camera.getProjection())
 		);
+
+		m_frame = 0;
 	}
 
 	if (m_camera.processInput(event))
