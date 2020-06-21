@@ -15,3 +15,5 @@ Simple Path Tracer using OpenGL Compute Shaders, following [Peter Shirley's Book
   - https://cseweb.ucsd.edu/~ravir/papers/structured/structured.pdf
 - 'Proper' BSDF
 - Model Loading & BVH construction (yuck!)
+## Screenshots
+![Screenshot 001](screenshots/001.png)
