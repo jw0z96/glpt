@@ -28,6 +28,8 @@ public:
 		m_distance = distance;
 	}
 
+	inline float getDistance() const { return m_distance; }
+
 	inline const glm::mat4& getView() const
 	{
 		// not sure why this doesn't work, whilst returning a reference:

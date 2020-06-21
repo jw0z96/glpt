@@ -23,11 +23,15 @@ Scene::Scene() :
 	m_skyTex(),
 	m_tonemappingMode(NONE),
 	m_exposure(1.0f),
+	m_focalDistance(1.0f),
+	m_radius(1.0f),
 	m_frame(0)
 {
 	glDisable(GL_DEPTH_TEST);
 	m_emptyVAO.bind();
 	resize(800, 600); // these constants match those in main.cpp
+
+	m_focalDistance = m_camera.getDistance();
 
 	// Set constant uniforms on the shaders
 	m_computeShader.use();
@@ -40,7 +44,7 @@ Scene::Scene() :
 	glUniform1i(m_computeShader.getUniformLocation("skyTexture"), 1);
 }
 
-void Scene::loadSky(const char* filepath)
+void Scene::loadHDRI(const char* filepath)
 {
 	int width, height, channels;
 
@@ -146,6 +150,9 @@ void Scene::render()
 
 		m_computeShader.use();
 
+		glUniform1f(m_computeShader.getUniformLocation("focalDistance"), m_focalDistance);
+		glUniform1f(m_computeShader.getUniformLocation("apertureRadius"), m_radius);
+
 		glUniformMatrix4fv(
 			m_computeShader.getUniformLocation("view"),
 			1,
@@ -214,8 +221,22 @@ void Scene::renderUI()
 
 	ImGui::Separator();
 
+	ImGui::Text("Distance");
+	if (ImGui::SliderFloat("Distance", &m_focalDistance, 0.0f, 10.0f, "%.1f"))
+	{
+		m_frame = 0;
+	}
+
+
+	ImGui::Text("Radius");
+	if (ImGui::SliderFloat("Radius", &m_radius, 0.0f, 10.0f, "%.1f"))
+	{
+		m_frame = 0;
+	}
+
+
 	ImGui::Text("Exposure");
-	ImGui::SliderFloat("", &m_exposure, 0.0f, 10.0f, "%.1f");
+	ImGui::SliderFloat("Exposure", &m_exposure, 0.0f, 10.0f, "%.1f");
 
 	ImGui::Text("Tonemapping Mode");
 	const char* items[] = { "None", "ACEs Filmic"};

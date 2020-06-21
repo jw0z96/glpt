@@ -16,7 +16,7 @@ public:
 
 	// ~Scene(); // let the compiler do it
 
-	void loadSky(const char* filepath);
+	void loadHDRI(const char* filepath);
 
 	void processEvent(const SDL_Event& event);
 
@@ -51,5 +51,7 @@ private:
 
 	TonemappingMode m_tonemappingMode;
 	float m_exposure;
+	float m_focalDistance;
+	float m_radius;
 	GLuint m_frame;
 };

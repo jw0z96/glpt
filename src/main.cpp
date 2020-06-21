@@ -127,7 +127,7 @@ int main(int argc, char const *argv[])
 	{
 		Scene scene;
 		scene.resize(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
-		scene.loadSky(filepath);
+		scene.loadHDRI(filepath);
 
 		SDL_Event event;
 		bool running = true;

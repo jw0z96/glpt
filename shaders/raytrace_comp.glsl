@@ -8,6 +8,9 @@ layout(rgba32f, binding = 0) uniform image2D outputTexture;
 layout(binding = 1) uniform sampler2D skyTexture;
 
 uniform uint frame;
+
+uniform float focalDistance;
+uniform float apertureRadius;
 uniform mat4 view;
 uniform mat4 projection;
 
@@ -125,16 +128,21 @@ HitInfo hitScene(Ray ray)
 	return info;
 }
 
+vec3 diffuseSample(vec3 normal)
+{
+	return normalize(normal + randomUnitVector(rngSeed));
+}
+
 // get the next ray
 vec3 surfaceDistribution(vec3 view, vec3 normal, float roughness) // material
 {
 	return randomFloat(rngSeed) < roughness ?
-		normalize(normal + randomUnitVector(rngSeed)) :
+		diffuseSample(normal) : // + randomUnitVector(rngSeed)) :
 		reflect(view, normal);
 	// return reflect(view, normal);
 }
 
-vec3 scene(Ray ray)
+vec3 radiance(Ray ray)
 {
 	vec3 outputColour = vec3(0.0f);
 	vec3 surfaceColour = vec3(1.0f); // start at 1.0f, multiply through by the surface colour of the spheres
@@ -195,13 +203,25 @@ void main()
 		return;
 	}
 
-	// TODO: loop here for num samples?
+	// We get the camera's center by multiplying the inverse view matrix through the origin
+	mat4 inView = inverse(view);
+	vec3 cameraCenter = (inView * vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 
+	// TODO: loop here for num samples?
 	Ray initialRay;
 
-	// We get the camera's position by multiplying the inverse view matrix through the origin
-	mat4 inView = inverse(view);
-	initialRay.origin = (inView * vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+	// offset the center by our camera radius (to model depth of field)
+	if (apertureRadius > 0.0f)
+	{
+		float r = apertureRadius * 0.5f * sqrt(randomFloat(rngSeed));
+		float theta = randomFloat(rngSeed) * TWO_PI;
+		vec2 apertureOffset = vec2(r * cos(theta), r * sin(theta));
+		initialRay.origin = (inView * vec4(apertureOffset, 0.0f, 1.0f)).xyz;
+	}
+	else
+	{
+		initialRay.origin = cameraCenter;
+	}
 
 	// random offset between [-0.5, 0.5] to do random sampling around the pixel center
 	vec2 jitter = vec2(randomFloat(rngSeed), randomFloat(rngSeed)) - 0.5f;
@@ -217,10 +237,23 @@ void main()
 	initialRay.direction = (vec4(initialRay.direction, 1.0f) * view).xyz;
 	initialRay.direction = normalize(initialRay.direction);
 
-	vec4 outputColour = vec4(scene(initialRay), 1.0f);
-	// vec4 outputColour = vec4(mix(scene(initialRay), scene(initialRay), 0.5), 1.0f);
+	// adjust the direction to account for the new origin, if we're modelling dof
+	if (apertureRadius > 0.0f)
+	{
+		float distanceToSphere = length(cameraCenter - spherePositions[1]);
+		initialRay.direction = normalize(
+			(cameraCenter + initialRay.direction * distanceToSphere) - initialRay.origin
+		);
+		// initialRay.direction = normalize(
+		// 	(cameraCenter + initialRay.direction * focalDistance) - initialRay.origin
+		// );
+	}
 
-	vec4 lastFrameColor = imageLoad(outputTexture, ivec2(index));
-	outputColour = mix(lastFrameColor, outputColour, 1.0f / float(frame + 1));
+	// add the sample from the scene with the colour in the texture
+	vec4 outputColour = mix(
+		imageLoad(outputTexture, ivec2(index)),
+		vec4(radiance(initialRay), 1.0f),
+		1.0f / float(frame + 1)
+	);
 	imageStore(outputTexture, ivec2(index), outputColour);
 }
