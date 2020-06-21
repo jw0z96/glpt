@@ -2,6 +2,8 @@
 
 #include <stb/stb_image.h>
 
+#include <tinyobjloader/tiny_obj_loader.h>
+
 #include <imgui/imgui.h>
 
 #include <glm/gtc/type_ptr.hpp>
@@ -80,6 +82,88 @@ void Scene::loadHDRI(const char* filepath)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	stbi_image_free(data);
+}
+
+void Scene::loadOBJ(const char* filepath)
+{
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+
+	std::string warn;
+	std::string err;
+
+	std::cout<<"loadOBJ: "<<filepath<<"\n";
+
+	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath);
+
+	if (!warn.empty()) {
+		std::cout << warn << std::endl;
+	}
+
+	if (!err.empty()) {
+		std::cerr << err << std::endl;
+	}
+
+	if (!ret)
+	{
+		return;
+	}
+
+	for (size_t f = 0; f < shapes[0].mesh.num_face_vertices.size(); f++)
+	{
+		if (shapes[0].mesh.num_face_vertices[f] != 3)
+		{
+			std::cout<<"Error: un-triangulated mesh!\n";
+			return;
+		}
+	}
+
+	// this contains vertex, normal, texcoord indices as integers
+	const std::vector<tinyobj::index_t>& faceIndices = shapes[0].mesh.indices;
+	std::vector<int> vertexIndices;
+	std::transform(
+		faceIndices.begin(),
+		faceIndices.end(),
+		std::back_inserter(vertexIndices),
+		[](const tinyobj::index_t& f){ return f.vertex_index; }
+	);
+
+	std::vector<int> normalIndices;
+	std::transform(
+		faceIndices.begin(),
+		faceIndices.end(),
+		std::back_inserter(normalIndices),
+		[](const tinyobj::index_t& f){ return f.normal_index; }
+	);
+
+	const size_t numFaces = vertexIndices.size() / 3;
+	const std::vector<float>& vertices = attrib.vertices;
+	const std::vector<float>& normals = attrib.normals;
+
+	std::cout<<"loadOBJ: faces: "<<numFaces<<"\n";
+	std::cout<<"loadOBJ: attrib.vertices.size(): "<<attrib.vertices.size()<<"\n";
+	std::cout<<"loadOBJ: attrib.normals.size(): "<<attrib.normals.size()<<"\n";
+	std::cout<<"loadOBJ: attrib.texcoords.size(): "<<attrib.texcoords.size()<<"\n";
+
+	m_computeShader.use();
+	glUniform1ui(m_computeShader.getUniformLocation("meshNumFaces"), numFaces);
+
+	m_meshVertexIndices.bindAs(GL_SHADER_STORAGE_BUFFER);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * vertexIndices.size(), vertexIndices.data(), GL_STATIC_DRAW);
+	m_meshVertexIndices.bindAsIndexed(GL_SHADER_STORAGE_BUFFER, 0);
+
+	m_meshNormalIndices.bindAs(GL_SHADER_STORAGE_BUFFER);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * normalIndices.size(), normalIndices.data(), GL_STATIC_DRAW);
+	m_meshNormalIndices.bindAsIndexed(GL_SHADER_STORAGE_BUFFER, 1);
+
+	m_meshVertices.bindAs(GL_SHADER_STORAGE_BUFFER);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+	m_meshVertices.bindAsIndexed(GL_SHADER_STORAGE_BUFFER, 2);
+
+	m_meshNormals.bindAs(GL_SHADER_STORAGE_BUFFER);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * normals.size(), normals.data(), GL_STATIC_DRAW);
+	m_meshNormals.bindAsIndexed(GL_SHADER_STORAGE_BUFFER, 3);
 }
 
 void Scene::processEvent(const SDL_Event& event)

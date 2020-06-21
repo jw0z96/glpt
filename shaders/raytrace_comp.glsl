@@ -14,6 +14,33 @@ uniform float apertureRadius;
 uniform mat4 view;
 uniform mat4 projection;
 
+// mesh data
+uniform uint meshNumFaces;
+
+layout(std430, binding = 0) readonly buffer meshVertexIndicesBuffer
+{
+	int vertexIndices[];
+};
+
+layout(std430, binding = 1) readonly buffer meshNormalIndicesBuffer
+{
+	int normalIndices[];
+};
+
+layout(std430, binding = 2) readonly buffer meshVerticesBuffer
+{
+	float vertices[];
+};
+
+layout(std430, binding = 3) readonly buffer meshNormalsBuffer
+{
+	float normals[];
+};
+
+const vec3 meshColour = vec3(1.0f, 0.2f, 0.2f);
+const float meshRoughness = 0.2f;
+const float meshEmission = 0.0f;
+
 const float PI = 3.141592653589793f;
 const float TWO_PI = 6.283185307179586f;
 
@@ -49,29 +76,6 @@ vec3 randomUnitVector(inout uint seed)
 
 #define TRACE_DEPTH 4
 
-// global 'scene' info
-#define NUM_SPHERES 6
-const vec3 spherePositions[NUM_SPHERES] = {
-	vec3(0.0f, -1001.0f, 0.0f),
-	vec3(0.0f, 0.0f, 2.0f),
-	vec3(0.0f, 0.0f, -2.0f),
-	vec3(2.0f, 0.0f, 0.0f),
-	vec3(-2.0f, 0.0f, 0.0f),
-	vec3(0.0f, 2.0f, 0.0f)
-};
-const float sphereRadii[NUM_SPHERES] = {1000.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.5f};
-const vec3 sphereColours[NUM_SPHERES] = {
-	vec3(0.2f),
-	vec3(0.2f, 0.2f, 1.0f),
-	vec3(0.2f, 1.0f, 0.2f),
-	vec3(1.0f, 0.2f, 0.2f),
-	vec3(1.0f, 1.0f, 1.0f),
-	vec3(1.0f, 1.0f, 1.0f)
-};
-const float sphereRoughness[NUM_SPHERES] = {1.0f, 0.0f, 0.333f, 0.667f, 1.0f, 0.0f};
-const float sphereEmission[NUM_SPHERES] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 100.0f};
-// pack sphere positions with radius into vec4? can't access with struct member function
-
 struct Ray
 {
 	vec3 origin;
@@ -81,7 +85,10 @@ struct Ray
 struct HitInfo
 {
 	float dist;
-	int index; // the index of the sphere we hit
+	// int index; // the index of the sphere we hit
+	int index; // the index of the triangle we hit (in the single mesh we have)
+
+	vec2 bary;
 };
 
 vec2 equirectangularLookup(vec3 dir)
@@ -91,38 +98,66 @@ vec2 equirectangularLookup(vec3 dir)
 	return uv;
 }
 
-// hit sphere func for testing
-float hitSphere(Ray ray, vec3 spherePosition, float radius)
+void hitTriangle(Ray ray, int index, inout HitInfo info)
 {
-	float t = -1.0f;
-	vec3 oc = ray.origin - spherePosition;
-	float a = dot(ray.direction, ray.direction);
-	float b = 2.0f * dot(oc, ray.direction);
-	float c = dot(oc, oc) - radius * radius;
-	float discriminant = b * b - 4 * a * c;
+	vec3 vertex0 = vec3(
+		vertices[vertexIndices[index * 3 + 0] * 3 + 0],
+		vertices[vertexIndices[index * 3 + 0] * 3 + 1],
+		vertices[vertexIndices[index * 3 + 0] * 3 + 2]
+	);
 
-	if (discriminant < 0)
+	vec3 vertex1 = vec3(
+		vertices[vertexIndices[index * 3 + 1] * 3 + 0],
+		vertices[vertexIndices[index * 3 + 1] * 3 + 1],
+		vertices[vertexIndices[index * 3 + 1] * 3 + 2]
+	);
+
+	vec3 vertex2 = vec3(
+		vertices[vertexIndices[index * 3 + 2] * 3 + 0],
+		vertices[vertexIndices[index * 3 + 2] * 3 + 1],
+		vertices[vertexIndices[index * 3 + 2] * 3 + 2]
+	);
+
+	vec3 edge01 = vertex1 - vertex0;
+	vec3 edge02 = vertex2 - vertex0;
+
+	vec3 pvec = cross(ray.direction, edge02);
+	float det = dot(edge01, pvec);
+
+	if (det < 0.001f) return; // epsilon, if det is negative the hit is backfacing
+
+	float invDet = 1.0f / det;
+
+	vec3 tvec = ray.origin - vertex0;
+	float u = dot(tvec, pvec) * invDet;
+	if (u < 0 || u > 1) return;
+
+	vec3 qvec = cross(tvec, edge01);
+	float v = dot(ray.direction, qvec) * invDet;
+	if (v < 0 || u + v > 1) return;
+
+	float t = dot(edge02, qvec) * invDet;
+
+	if (t < info.dist || info.index == -1)
 	{
-		return -1.0f;
+		info.dist = t;
+		info.index = index;
+		info.bary.x = u;
+		info.bary.y = v;
 	}
-
-	return (-b - sqrt(discriminant)) / (2.0f * a);
 }
 
-HitInfo hitScene(Ray ray)
+HitInfo hitMesh(Ray ray)
 {
+	// TODO: loop over meshNumFaces
 	HitInfo info;
 	info.dist = -1.0f; // max trace distance?? // could be hit position instead?
 	info.index = -1;
-	for (int i = 0; i < NUM_SPHERES; ++i)
-	{
-		float t = hitSphere(ray, spherePositions[i], sphereRadii[i]);
 
-		if (t > 0.0f && (t < info.dist || info.index == -1))
-		{
-			info.dist = t;
-			info.index = i;
-		}
+	// for (int i = 0; i < meshNumFaces; ++i)
+	for (int i = 0; i < 10; ++i)
+	{
+		hitTriangle(ray, i, info);
 	}
 
 	return info;
@@ -137,9 +172,13 @@ vec3 diffuseSample(vec3 normal)
 vec3 surfaceDistribution(vec3 view, vec3 normal, float roughness) // material
 {
 	return randomFloat(rngSeed) < roughness ?
-		diffuseSample(normal) : // + randomUnitVector(rngSeed)) :
-		reflect(view, normal);
+	// 	diffuseSample(normal) :
+		normalize(normal + roughness * randomUnitVector(rngSeed)) :
+		normalize(reflect(view, normal) + (1.0f - roughness) * randomUnitVector(rngSeed));
+	// 	reflect(view, normal);
 	// return reflect(view, normal);
+	// return diffuseSample(view, normal);
+
 }
 
 vec3 radiance(Ray ray)
@@ -150,7 +189,7 @@ vec3 radiance(Ray ray)
 	HitInfo info;
 	for (uint depth = 0; depth < TRACE_DEPTH; ++depth)
 	{
-		info = hitScene(ray);
+		info = hitMesh(ray);
 
 		if (info.index == -1) // the ray didn't hit anything
 		{
@@ -158,15 +197,35 @@ vec3 radiance(Ray ray)
 			break;
 		}
 
+		// get the normals and interpolate them using barycentric coordinates
+		vec3 normal0 = vec3(
+			normals[normalIndices[info.index * 3 + 0] * 3 + 0],
+			normals[normalIndices[info.index * 3 + 0] * 3 + 1],
+			normals[normalIndices[info.index * 3 + 0] * 3 + 2]
+		);
+
+		vec3 normal1 = vec3(
+			normals[normalIndices[info.index * 3 + 1] * 3 + 0],
+			normals[normalIndices[info.index * 3 + 1] * 3 + 1],
+			normals[normalIndices[info.index * 3 + 1] * 3 + 2]
+		);
+
+		vec3 normal2 = vec3(
+			normals[normalIndices[info.index * 3 + 2] * 3 + 0],
+			normals[normalIndices[info.index * 3 + 2] * 3 + 1],
+			normals[normalIndices[info.index * 3 + 2] * 3 + 2]
+		);
+
+		// vec3 normal = info.bary.x * normal0 + info.bary.y * normal1 + (1.0f - info.bary.x - info.bary.y) * normal2;
+		vec3 normal = info.bary.x * normal1 + info.bary.y * normal2 + (1.0f - info.bary.x - info.bary.y) * normal0;
+		normal = normalize(normal);
+
 		vec3 hitPos = ray.origin + ray.direction * info.dist;
-		vec3 sphereCenter = spherePositions[info.index];
-		vec3 normal = normalize(hitPos - sphereCenter);
-
 		ray.origin = hitPos + normal * 0.01f; // avoid self intersection?
-		ray.direction = surfaceDistribution(ray.direction, normal, sphereRoughness[info.index]);
+		ray.direction = surfaceDistribution(ray.direction, normal, meshRoughness);
 
-		outputColour += surfaceColour * sphereEmission[info.index]; // ???
-		surfaceColour *= sphereColours[info.index];
+		outputColour += surfaceColour * meshEmission; // ???
+		surfaceColour *= meshColour;
 
 		// do 'russian roulette' sampling - as our sufaceColour reduces, the chances of terminating a ray
 		// increases, as it will be less likely to contribute to our image
@@ -196,7 +255,7 @@ void main()
 {
 	ivec2 textureDimensions = imageSize(outputTexture);
 
-	uvec2 index = gl_GlobalInvocationID.xy; // local size 1
+	uvec2 index = gl_GlobalInvocationID.xy;
 
 	if (index.x >- textureDimensions.x || index.y >- textureDimensions.y)
 	{
@@ -223,7 +282,7 @@ void main()
 		initialRay.origin = cameraCenter;
 	}
 
-	// random offset between [-0.5, 0.5] to do random sampling around the pixel center
+	//Wrandom offset between [-0.5, 0.5] to do random sampling around the pixel center
 	vec2 jitter = vec2(randomFloat(rngSeed), randomFloat(rngSeed)) - 0.5f;
 
 	// projection[1][1] gets us tan(0.5 * fov), with fov in radians, which gives us the correct fov
@@ -240,9 +299,9 @@ void main()
 	// adjust the direction to account for the new origin, if we're modelling dof
 	if (apertureRadius > 0.0f)
 	{
-		float distanceToSphere = length(cameraCenter - spherePositions[1]);
+		float distanceToOrigin = length(cameraCenter);
 		initialRay.direction = normalize(
-			(cameraCenter + initialRay.direction * distanceToSphere) - initialRay.origin
+			(cameraCenter + initialRay.direction * distanceToOrigin) - initialRay.origin
 		);
 		// initialRay.direction = normalize(
 		// 	(cameraCenter + initialRay.direction * focalDistance) - initialRay.origin

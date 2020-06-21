@@ -8,6 +8,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
+#include <tinyobjloader/tiny_obj_loader.h>
+
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_sdl.h>
 #include <imgui/imgui_impl_opengl3.h>
@@ -63,7 +66,8 @@ int main(int argc, char const *argv[])
 	std::cout << "Starting PointCloudRendering\n";
 
 	// Get command line arguments, we should really bail / print a help message here
-	const char* filepath = (argc > 1) ? argv[1] : "res/leadenhall_market_2k.hdr";
+	const char* hdriFilePath = (argc > 1) ? argv[1] : "res/leadenhall_market_2k.hdr";
+	const char* objFilePath = (argc > 2) ? argv[2] : "res/bunny.obj";
 
 	// initialize SDL
 	if(SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -127,7 +131,8 @@ int main(int argc, char const *argv[])
 	{
 		Scene scene;
 		scene.resize(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
-		scene.loadHDRI(filepath);
+		scene.loadHDRI(hdriFilePath);
+		scene.loadOBJ(objFilePath);
 
 		SDL_Event event;
 		bool running = true;
@@ -136,7 +141,12 @@ int main(int argc, char const *argv[])
 			// Event handling
 			while(SDL_PollEvent(&event) != 0)
 			{
-				running = event.type != SDL_QUIT; // Exit if the window is closed
+				if (event.type == SDL_QUIT ||
+					(event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE))
+				{
+					running = false;
+					break;
+				}
 				scene.processEvent(event);
 			}
 

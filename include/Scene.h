@@ -18,6 +18,8 @@ public:
 
 	void loadHDRI(const char* filepath);
 
+	void loadOBJ(const char* filepath);
+
 	void processEvent(const SDL_Event& event);
 
 	void resize(const unsigned int& width, const unsigned int& height);
@@ -46,6 +48,7 @@ private:
 
 	const GLUtils::ShaderProgram m_computeShader, m_outputShader;
 	const GLUtils::Buffer m_indirectComputeBuffer;
+	const GLUtils::Buffer m_meshVertexIndices, m_meshNormalIndices, m_meshVertices, m_meshNormals;
 	const GLUtils::VAO m_emptyVAO;
 	const GLUtils::Texture m_outputTex, m_skyTex;
 
